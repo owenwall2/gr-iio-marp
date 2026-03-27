@@ -20,7 +20,7 @@
 var planes = {};
 
 // Create SocketIO instance
-var socket = io('http://localhost:5000');
+var socket = io();
 
 socket.on('connect', function() {
   console.log('Client has connected via SocketIO.');

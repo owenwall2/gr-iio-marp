@@ -5,8 +5,7 @@
 # SPDX-License-Identifier: GPL-3.0
 #
 # GNU Radio Python Flow Graph
-# Title: ADS-B Receiver
-# Author: Matt Hostetter
+# Title: Not titled yet
 # GNU Radio version: 3.8.1.0
 
 from distutils.version import StrictVersion
@@ -22,28 +21,28 @@ if __name__ == '__main__':
             print("Warning: failed to XInitThreads()")
 
 from PyQt5 import Qt
-from gnuradio import eng_notation
 from gnuradio import qtgui
 from gnuradio.filter import firdes
 import sip
-from gnuradio import analog
 from gnuradio import blocks
+from gnuradio import filter
 from gnuradio import gr
 import sys
 import signal
 from argparse import ArgumentParser
 from gnuradio.eng_arg import eng_float, intx
+from gnuradio import eng_notation
 import adsb
 import gnuradio.adsb as adsb
 import iio
 from gnuradio import qtgui
 
-class adsb_rx(gr.top_block, Qt.QWidget):
+class adsb_app(gr.top_block, Qt.QWidget):
 
     def __init__(self):
-        gr.top_block.__init__(self, "ADS-B Receiver")
+        gr.top_block.__init__(self, "Not titled yet")
         Qt.QWidget.__init__(self)
-        self.setWindowTitle("ADS-B Receiver")
+        self.setWindowTitle("Not titled yet")
         qtgui.util.check_set_qss()
         try:
             self.setWindowIcon(Qt.QIcon.fromTheme('gnuradio-grc'))
@@ -61,7 +60,7 @@ class adsb_rx(gr.top_block, Qt.QWidget):
         self.top_grid_layout = Qt.QGridLayout()
         self.top_layout.addLayout(self.top_grid_layout)
 
-        self.settings = Qt.QSettings("GNU Radio", "adsb_rx")
+        self.settings = Qt.QSettings("GNU Radio", "adsb_app")
 
         try:
             if StrictVersion(Qt.qVersion()) < StrictVersion("5.0.0"):
@@ -74,48 +73,33 @@ class adsb_rx(gr.top_block, Qt.QWidget):
         ##################################################
         # Variables
         ##################################################
-        self.threshold = threshold = 0.010
-        self.gain = gain = 100
-        self.fs = fs = int(2e6)
-        self.fc = fc = int(1090e6)
+        self.samp_rate = samp_rate = 32000
 
         ##################################################
         # Blocks
         ##################################################
-        self._threshold_tool_bar = Qt.QToolBar(self)
-        self._threshold_tool_bar.addWidget(Qt.QLabel('Detection Threshold' + ": "))
-        self._threshold_line_edit = Qt.QLineEdit(str(self.threshold))
-        self._threshold_tool_bar.addWidget(self._threshold_line_edit)
-        self._threshold_line_edit.returnPressed.connect(
-            lambda: self.set_threshold(eng_notation.str_to_num(str(self._threshold_line_edit.text()))))
-        self.top_grid_layout.addWidget(self._threshold_tool_bar, 0, 1, 1, 1)
-        for r in range(0, 1):
-            self.top_grid_layout.setRowStretch(r, 1)
-        for c in range(1, 2):
-            self.top_grid_layout.setColumnStretch(c, 1)
         self.qtgui_time_sink_x_0 = qtgui.time_sink_f(
-            int(fs*150e-6), #size
-            int(fs), #samp_rate
+            300, #size
+            2000, #samp_rate
             "", #name
-            2 #number of inputs
+            1 #number of inputs
         )
-        self.qtgui_time_sink_x_0.set_update_time(1.0/100.0)
-        self.qtgui_time_sink_x_0.set_y_axis(0, 1)
+        self.qtgui_time_sink_x_0.set_update_time(0.10)
+        self.qtgui_time_sink_x_0.set_y_axis(-1, 1)
 
         self.qtgui_time_sink_x_0.set_y_label('Amplitude', "")
 
         self.qtgui_time_sink_x_0.enable_tags(True)
-        self.qtgui_time_sink_x_0.set_trigger_mode(qtgui.TRIG_MODE_TAG, qtgui.TRIG_SLOPE_POS, 0, 1.25e-6, 0, "burst")
+        self.qtgui_time_sink_x_0.set_trigger_mode(qtgui.TRIG_MODE_FREE, qtgui.TRIG_SLOPE_POS, 0.0, 0, 0, "")
         self.qtgui_time_sink_x_0.enable_autoscale(False)
-        self.qtgui_time_sink_x_0.enable_grid(True)
+        self.qtgui_time_sink_x_0.enable_grid(False)
         self.qtgui_time_sink_x_0.enable_axis_labels(True)
         self.qtgui_time_sink_x_0.enable_control_panel(False)
         self.qtgui_time_sink_x_0.enable_stem_plot(False)
 
-        self.qtgui_time_sink_x_0.disable_legend()
 
-        labels = ['', '', '', '', '',
-            '', '', '', '', '']
+        labels = ['Signal 1', 'Signal 2', 'Signal 3', 'Signal 4', 'Signal 5',
+            'Signal 6', 'Signal 7', 'Signal 8', 'Signal 9', 'Signal 10']
         widths = [1, 1, 1, 1, 1,
             1, 1, 1, 1, 1]
         colors = ['blue', 'red', 'green', 'black', 'cyan',
@@ -124,11 +108,11 @@ class adsb_rx(gr.top_block, Qt.QWidget):
             1.0, 1.0, 1.0, 1.0, 1.0]
         styles = [1, 1, 1, 1, 1,
             1, 1, 1, 1, 1]
-        markers = [0, -1, -1, -1, -1,
+        markers = [-1, -1, -1, -1, -1,
             -1, -1, -1, -1, -1]
 
 
-        for i in range(2):
+        for i in range(1):
             if len(labels[i]) == 0:
                 self.qtgui_time_sink_x_0.set_line_label(i, "Data {0}".format(i))
             else:
@@ -140,28 +124,22 @@ class adsb_rx(gr.top_block, Qt.QWidget):
             self.qtgui_time_sink_x_0.set_line_alpha(i, alphas[i])
 
         self._qtgui_time_sink_x_0_win = sip.wrapinstance(self.qtgui_time_sink_x_0.pyqwidget(), Qt.QWidget)
-        self.top_grid_layout.addWidget(self._qtgui_time_sink_x_0_win, 1, 0, 1, 2)
-        for r in range(1, 2):
-            self.top_grid_layout.setRowStretch(r, 1)
-        for c in range(0, 2):
-            self.top_grid_layout.setColumnStretch(c, 1)
-        self.iio_fmcomms2_source_0 = iio.fmcomms2_source_f32c('ip:192.168.65.254', fc, fs, 20000000, True, False, 32768, True, True, True, 'manual', 64, 'manual', 64, 'A_BALANCED', '', True)
-        self._gain_tool_bar = Qt.QToolBar(self)
-        self._gain_tool_bar.addWidget(Qt.QLabel('Gain (dB)' + ": "))
-        self._gain_line_edit = Qt.QLineEdit(str(self.gain))
-        self._gain_tool_bar.addWidget(self._gain_line_edit)
-        self._gain_line_edit.returnPressed.connect(
-            lambda: self.set_gain(eng_notation.str_to_num(str(self._gain_line_edit.text()))))
-        self.top_grid_layout.addWidget(self._gain_tool_bar, 0, 0, 1, 1)
-        for r in range(0, 1):
-            self.top_grid_layout.setRowStretch(r, 1)
-        for c in range(0, 1):
-            self.top_grid_layout.setColumnStretch(c, 1)
-        self.blocks_complex_to_mag_squared_0 = blocks.complex_to_mag_squared(1)
-        self.analog_const_source_x_0 = analog.sig_source_f(0, analog.GR_CONST_WAVE, 0, 0, threshold)
-        self.adsb_map_plotter_0 = adsb.map_plotter(34.685, -82.953)
-        self.adsb_framer_1 = adsb.framer(fs, threshold)
-        self.adsb_demod_0 = adsb.demod(fs)
+        self.top_grid_layout.addWidget(self._qtgui_time_sink_x_0_win)
+        self.low_pass_filter_0 = filter.fir_filter_ccf(
+            1,
+            firdes.low_pass(
+                1,
+                2000000,
+                900000,
+                200000,
+                firdes.WIN_HAMMING,
+                6.76))
+        self.iio_fmcomms2_source_1 = iio.fmcomms2_source_f32c('ip:192.168.65.254', 1090*10**6, 2000000, 2000000, True, False, 32768, True, True, True, 'manual', 64, 'hybrid', 64, 'A_BALANCED', '', True)
+        self.blocks_null_sink_0 = blocks.null_sink(gr.sizeof_float*1)
+        self.blocks_complex_to_float_0 = blocks.complex_to_float(1)
+        self.adsb_map_plotter_0 = adsb.map_plotter(34.676, -82.837)
+        self.adsb_framer_0 = adsb.framer(2e6, 0.01)
+        self.adsb_demod_0 = adsb.demod(2e6)
         self.adsb_decoder_0 = adsb.decoder("Extended Squitter Only", "None", "Brief")
 
 
@@ -172,50 +150,26 @@ class adsb_rx(gr.top_block, Qt.QWidget):
         self.msg_connect((self.adsb_decoder_0, 'decoded'), (self.adsb_map_plotter_0, 'in'))
         self.msg_connect((self.adsb_demod_0, 'demodulated'), (self.adsb_decoder_0, 'demodulated'))
         self.connect((self.adsb_demod_0, 0), (self.qtgui_time_sink_x_0, 0))
-        self.connect((self.adsb_framer_1, 0), (self.adsb_demod_0, 0))
-        self.connect((self.analog_const_source_x_0, 0), (self.qtgui_time_sink_x_0, 1))
-        self.connect((self.blocks_complex_to_mag_squared_0, 0), (self.adsb_framer_1, 0))
-        self.connect((self.iio_fmcomms2_source_0, 0), (self.blocks_complex_to_mag_squared_0, 0))
+        self.connect((self.adsb_framer_0, 0), (self.adsb_demod_0, 0))
+        self.connect((self.blocks_complex_to_float_0, 0), (self.adsb_framer_0, 0))
+        self.connect((self.blocks_complex_to_float_0, 1), (self.blocks_null_sink_0, 0))
+        self.connect((self.iio_fmcomms2_source_1, 0), (self.low_pass_filter_0, 0))
+        self.connect((self.low_pass_filter_0, 0), (self.blocks_complex_to_float_0, 0))
 
     def closeEvent(self, event):
-        self.settings = Qt.QSettings("GNU Radio", "adsb_rx")
+        self.settings = Qt.QSettings("GNU Radio", "adsb_app")
         self.settings.setValue("geometry", self.saveGeometry())
         event.accept()
 
-    def get_threshold(self):
-        return self.threshold
+    def get_samp_rate(self):
+        return self.samp_rate
 
-    def set_threshold(self, threshold):
-        self.threshold = threshold
-        Qt.QMetaObject.invokeMethod(self._threshold_line_edit, "setText", Qt.Q_ARG("QString", eng_notation.num_to_str(self.threshold)))
-        self.adsb_framer_1.set_threshold(self.threshold)
-        self.analog_const_source_x_0.set_offset(self.threshold)
-
-    def get_gain(self):
-        return self.gain
-
-    def set_gain(self, gain):
-        self.gain = gain
-        Qt.QMetaObject.invokeMethod(self._gain_line_edit, "setText", Qt.Q_ARG("QString", eng_notation.num_to_str(self.gain)))
-
-    def get_fs(self):
-        return self.fs
-
-    def set_fs(self, fs):
-        self.fs = fs
-        self.iio_fmcomms2_source_0.set_params(self.fc, self.fs, 20000000, True, True, True, 'manual', 64, 'manual', 64, 'A_BALANCED', '', True)
-        self.qtgui_time_sink_x_0.set_samp_rate(int(self.fs))
-
-    def get_fc(self):
-        return self.fc
-
-    def set_fc(self, fc):
-        self.fc = fc
-        self.iio_fmcomms2_source_0.set_params(self.fc, self.fs, 20000000, True, True, True, 'manual', 64, 'manual', 64, 'A_BALANCED', '', True)
+    def set_samp_rate(self, samp_rate):
+        self.samp_rate = samp_rate
 
 
 
-def main(top_block_cls=adsb_rx, options=None):
+def main(top_block_cls=adsb_app, options=None):
 
     if StrictVersion("4.5.0") <= StrictVersion(Qt.qVersion()) < StrictVersion("5.0.0"):
         style = gr.prefs().get_string('qtgui', 'style', 'raster')

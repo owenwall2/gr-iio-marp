@@ -33,7 +33,7 @@ import sys
 import signal
 from argparse import ArgumentParser
 from gnuradio.eng_arg import eng_float, intx
-import adsb
+from gnuradio import zeromq
 import gnuradio.adsb as adsb
 import iio
 from gnuradio import qtgui
@@ -93,6 +93,7 @@ class adsb_rx(gr.top_block, Qt.QWidget):
             self.top_grid_layout.setRowStretch(r, 1)
         for c in range(1, 2):
             self.top_grid_layout.setColumnStretch(c, 1)
+        self.zeromq_pub_msg_sink_0 = zeromq.pub_msg_sink('tcp://127.0.0.0:5001', 10)
         self.qtgui_time_sink_x_0 = qtgui.time_sink_f(
             int(fs*150e-6), #size
             int(fs), #samp_rate
@@ -159,7 +160,6 @@ class adsb_rx(gr.top_block, Qt.QWidget):
             self.top_grid_layout.setColumnStretch(c, 1)
         self.blocks_complex_to_mag_squared_0 = blocks.complex_to_mag_squared(1)
         self.analog_const_source_x_0 = analog.sig_source_f(0, analog.GR_CONST_WAVE, 0, 0, threshold)
-        self.adsb_map_plotter_0 = adsb.map_plotter(34.685, -82.953)
         self.adsb_framer_1 = adsb.framer(fs, threshold)
         self.adsb_demod_0 = adsb.demod(fs)
         self.adsb_decoder_0 = adsb.decoder("Extended Squitter Only", "None", "Brief")
@@ -169,7 +169,7 @@ class adsb_rx(gr.top_block, Qt.QWidget):
         ##################################################
         # Connections
         ##################################################
-        self.msg_connect((self.adsb_decoder_0, 'decoded'), (self.adsb_map_plotter_0, 'in'))
+        self.msg_connect((self.adsb_decoder_0, 'decoded'), (self.zeromq_pub_msg_sink_0, 'in'))
         self.msg_connect((self.adsb_demod_0, 'demodulated'), (self.adsb_decoder_0, 'demodulated'))
         self.connect((self.adsb_demod_0, 0), (self.qtgui_time_sink_x_0, 0))
         self.connect((self.adsb_framer_1, 0), (self.adsb_demod_0, 0))
