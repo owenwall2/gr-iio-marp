@@ -137,6 +137,21 @@ blocks:
     coordinate: [385, 284]
     rotation: 0
     state: enabled
+- name: adsb_map_plotter_0
+  id: adsb_map_plotter
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    home_lat: '34.685'
+    home_lon: '-82.953'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1173, 328]
+    rotation: 0
+    state: true
 - name: analog_const_source_x_0
   id: analog_const_source_x
   parameters:
@@ -167,7 +182,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [553, 168]
+    coordinate: [395, 172]
     rotation: 0
     state: enabled
 - name: iio_fmcomms2_source_0
@@ -302,7 +317,7 @@ blocks:
 - name: zeromq_pub_msg_sink_0
   id: zeromq_pub_msg_sink
   parameters:
-    address: tcp://127.0.0.0:5001
+    address: tcp://127.0.0.1:5001
     affinity: ''
     alias: ''
     comment: ''
@@ -316,6 +331,7 @@ blocks:
     state: true
 
 connections:
+- [adsb_decoder_0, decoded, adsb_map_plotter_0, in]
 - [adsb_decoder_0, decoded, zeromq_pub_msg_sink_0, in]
 - [adsb_demod_0, '0', qtgui_time_sink_x_0, '0']
 - [adsb_demod_0, demodulated, adsb_decoder_0, demodulated]

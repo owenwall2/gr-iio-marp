@@ -93,7 +93,7 @@ class adsb_rx(gr.top_block, Qt.QWidget):
             self.top_grid_layout.setRowStretch(r, 1)
         for c in range(1, 2):
             self.top_grid_layout.setColumnStretch(c, 1)
-        self.zeromq_pub_msg_sink_0 = zeromq.pub_msg_sink('tcp://127.0.0.0:5001', 10)
+        self.zeromq_pub_msg_sink_0 = zeromq.pub_msg_sink('tcp://127.0.0.1:5001', 10)
         self.qtgui_time_sink_x_0 = qtgui.time_sink_f(
             int(fs*150e-6), #size
             int(fs), #samp_rate
