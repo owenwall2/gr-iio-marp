@@ -143,13 +143,13 @@ blocks:
     affinity: ''
     alias: ''
     comment: ''
-    home_lat: '34.685'
-    home_lon: '-82.953'
+    home_lat: '34.6768'
+    home_lon: '-82.837'
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1173, 328]
+    coordinate: [1174, 316]
     rotation: 0
     state: true
 - name: analog_const_source_x_0
@@ -328,7 +328,7 @@ blocks:
     bus_structure: null
     coordinate: [1169, 251]
     rotation: 0
-    state: true
+    state: enabled
 
 connections:
 - [adsb_decoder_0, decoded, adsb_map_plotter_0, in]

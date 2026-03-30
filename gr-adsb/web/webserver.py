@@ -28,8 +28,6 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="/static")
 app.config["SECRET_KEY"] = "secret!"
-#socketio = SocketIO(app, cors_allowed_origins="*")
-
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 
@@ -59,29 +57,6 @@ def zmq_thread():
         except Exception as e:
             print("ZMQ error:", e)
             time.sleep(1)
-
-    # while True:
-    #     try:
-    #         pdu_bin = socket.recv()
-    #         print("Received ZMQ message ({} bytes)".format(len(pdu_bin)))
-        
-    #         # Try PMT first (real GNURadio data)
-    #         if HAS_PMT:
-    #             try:
-    #                 pdu   = pmt.deserialize_str(pdu_bin)
-    #                 plane = pmt.to_python(pmt.car(pdu))
-    #             except Exception:
-    #                 # Fall back to JSON (test data)
-    #                 plane = json.loads(pdu_bin.decode('utf-8'))
-    #         else:
-    #             # Try JSON directly
-    #             plane = json.loads(pdu_bin.decode('utf-8'))
-                
-    #         print(plane)
-    #         socketio.emit("updatePlane", plane)
-    #     except Exception as e:
-    #         print("ZMQ error:", e)
-    #         time.sleep(1)
 
 
 @app.route("/")
