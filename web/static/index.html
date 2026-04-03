@@ -248,18 +248,30 @@
     .fm-placeholder { height: 120px; display: flex; align-items: center; justify-content: center; font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 1px; }
 
     /* ── RADAR ───────────────────────────────────────────── */
-    #panel-radar { display: flex; flex-direction: column; background: var(--bg); padding: 20px; gap: 16px; }
-    .radar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; }
-    .radar-card { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; }
-    .radar-card-title { padding: 8px 14px; font-size: 9px; letter-spacing: 2px; color: var(--text-dim); border-bottom: 1px solid var(--border); text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; }
-    .radar-card canvas { flex: 1; width: 100%; display: block; }
-    .radar-targets { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-    .radar-targets-title { padding: 8px 14px; font-size: 9px; letter-spacing: 2px; color: var(--text-dim); border-bottom: 1px solid var(--border); text-transform: uppercase; }
-    #radar-target-table { width: 100%; border-collapse: collapse; font-family: 'Share Tech Mono', monospace; font-size: 11px; }
-    #radar-target-table th { padding: 6px 12px; color: var(--text-dim); font-weight: 400; text-align: left; border-bottom: 1px solid var(--border); font-size: 9px; letter-spacing: 1px; }
-    #radar-target-table td { padding: 5px 12px; color: var(--text); border-bottom: 1px solid rgba(26,45,68,0.5); }
-    #radar-target-table tr:last-child td { border-bottom: none; }
-    .radar-placeholder { padding: 24px; text-align: center; font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 1px; }
+    #panel-radar {
+      display: flex; flex-direction: column;
+      background: var(--bg); padding: 16px; gap: 0;
+    }
+    /* Single full-area heatmap card */
+    .radar-card {
+      flex: 1;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 4px; display: flex; flex-direction: column;
+      overflow: hidden; min-height: 0;
+    }
+    .radar-card-title {
+      padding: 8px 14px; flex-shrink: 0;
+      font-size: 9px; letter-spacing: 2px; color: var(--text-dim);
+      border-bottom: 1px solid var(--border); text-transform: uppercase;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    /* Canvas fills remaining card height */
+    #rd-canvas { flex: 1; width: 100%; display: block; min-height: 0; }
+    .radar-placeholder {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px; color: var(--text-dim); letter-spacing: 1px;
+    }
 
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
@@ -316,7 +328,7 @@
     <div id="params-fm" style="display:none">
       <div class="param-row">
         <span class="param-label">FREQ</span>
-        <input class="param-input" id="fm-freq-param" value="96.7" type="number" step="0.1">
+        <input class="param-input" id="fm-freq-param" value="88.1" type="number" step="0.1">
         <span class="param-unit">MHz</span>
       </div>
       <div class="param-row">
@@ -393,26 +405,16 @@
     </div>
   </div>
 
-  <!-- Radar -->
+  <!-- Radar — single full-area Delay-Doppler heatmap -->
   <div class="app-panel" id="panel-radar">
-    <div class="radar-grid">
-      <div class="radar-card">
-        <div class="radar-card-title">
-          <span>Range–Doppler Map</span>
-          <span id="radar-cpi-label" style="color:var(--accent3);font-size:9px;"></span>
-        </div>
-        <canvas id="rd-canvas" height="300"></canvas>
-        <div class="radar-placeholder" id="rd-placeholder">Waiting for radar data…</div>
+    <div class="radar-card">
+      <div class="radar-card-title">
+        <span>Delay–Doppler Heat Map</span>
+        <span style="color:var(--text-dim);font-size:9px;font-family:'Share Tech Mono',monospace;" id="radar-frame-label"></span>
       </div>
-      <div class="radar-card">
-        <div class="radar-card-title"><span>Doppler Slice</span></div>
-        <canvas id="doppler-canvas" height="300"></canvas>
-        <div class="radar-placeholder" id="doppler-placeholder">Waiting for radar data…</div>
-      </div>
-    </div>
-    <div class="radar-targets">
-      <div class="radar-targets-title">Detected Targets</div>
-      <div id="radar-target-body"><div class="radar-placeholder">No targets detected</div></div>
+      <!-- Canvas draws its own axes; rd-placeholder shown until first frame -->
+      <canvas id="rd-canvas"></canvas>
+      <div class="radar-placeholder" id="rd-placeholder">Waiting for radar data…</div>
     </div>
   </div>
 

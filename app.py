@@ -24,15 +24,14 @@ if __name__ == '__main__':
 from PyQt5 import Qt
 from gnuradio import eng_notation
 from gnuradio import analog
-from gnuradio import filter
-from gnuradio.filter import firdes
+from gnuradio import blocks
 from gnuradio import gr
+from gnuradio.filter import firdes
 import sys
 import signal
 from argparse import ArgumentParser
 from gnuradio.eng_arg import eng_float, intx
 from gnuradio import zeromq
-import iio
 from gnuradio import qtgui
 
 class app(gr.top_block, Qt.QWidget):
@@ -72,6 +71,7 @@ class app(gr.top_block, Qt.QWidget):
         # Variables
         ##################################################
         self.threshold = threshold = 0.010
+        self.select_index = select_index = 0
         self.gain = gain = 100
         self.fs = fs = int(2e6)
         self.fc = fc = int(88.1e6)
@@ -79,7 +79,8 @@ class app(gr.top_block, Qt.QWidget):
         ##################################################
         # Blocks
         ##################################################
-        self.zeromq_pub_sink_0 = zeromq.pub_sink(gr.sizeof_float, 1, 'tcp://127.0.0.1:5002', 10, False, -1)
+        self.zeromq_pub_sink_2 = zeromq.pub_sink(gr.sizeof_gr_complex, 1, 'tcp://127.0.0.1:5004', 10, False, -1)
+        self.zeromq_pub_sink_1 = zeromq.pub_sink(gr.sizeof_gr_complex, 1, 'tcp://127.0.0.1:5003', 10, False, -1)
         self._threshold_tool_bar = Qt.QToolBar(self)
         self._threshold_tool_bar.addWidget(Qt.QLabel('Detection Threshold' + ": "))
         self._threshold_line_edit = Qt.QLineEdit(str(self.threshold))
@@ -91,25 +92,28 @@ class app(gr.top_block, Qt.QWidget):
             self.top_grid_layout.setRowStretch(r, 1)
         for c in range(1, 2):
             self.top_grid_layout.setColumnStretch(c, 1)
-        self.rational_resampler_xxx_0 = filter.rational_resampler_ccc(
-                interpolation=12,
-                decimation=125,
-                taps=None,
-                fractional_bw=0.4)
-        self.iio_fmcomms2_source_0 = iio.fmcomms2_source_f32c('ip:192.168.65.254', fc, fs, 20000000, True, False, 32768, True, True, True, 'manual', 64, 'manual', 64, 'A_BALANCED', '', True)
-        self.analog_wfm_rcv_0 = analog.wfm_rcv(
-        	quad_rate=48000*4,
-        	audio_decimation=4,
-        )
+        self.blocks_throttle_1 = blocks.throttle(gr.sizeof_gr_complex*1, 32000,True)
+        self.blocks_throttle_0 = blocks.throttle(gr.sizeof_gr_complex*1, 32000,True)
+        self.blocks_delay_0 = blocks.delay(gr.sizeof_gr_complex*1, 512)
+        self.blocks_add_xx_1 = blocks.add_vcc(1)
+        self.blocks_add_xx_0 = blocks.add_vcc(1)
+        self.analog_noise_source_x_1 = analog.noise_source_c(analog.GR_GAUSSIAN, 1, 0)
+        self.analog_noise_source_x_0 = analog.noise_source_c(analog.GR_GAUSSIAN, 1, 0)
 
 
 
         ##################################################
         # Connections
         ##################################################
-        self.connect((self.analog_wfm_rcv_0, 0), (self.zeromq_pub_sink_0, 0))
-        self.connect((self.iio_fmcomms2_source_0, 0), (self.rational_resampler_xxx_0, 0))
-        self.connect((self.rational_resampler_xxx_0, 0), (self.analog_wfm_rcv_0, 0))
+        self.connect((self.analog_noise_source_x_0, 0), (self.blocks_throttle_0, 0))
+        self.connect((self.analog_noise_source_x_1, 0), (self.blocks_throttle_1, 0))
+        self.connect((self.blocks_add_xx_0, 0), (self.zeromq_pub_sink_1, 0))
+        self.connect((self.blocks_add_xx_1, 0), (self.zeromq_pub_sink_2, 0))
+        self.connect((self.blocks_delay_0, 0), (self.blocks_add_xx_1, 0))
+        self.connect((self.blocks_throttle_0, 0), (self.blocks_add_xx_0, 1))
+        self.connect((self.blocks_throttle_0, 0), (self.blocks_add_xx_1, 1))
+        self.connect((self.blocks_throttle_1, 0), (self.blocks_add_xx_0, 0))
+        self.connect((self.blocks_throttle_1, 0), (self.blocks_delay_0, 0))
 
     def closeEvent(self, event):
         self.settings = Qt.QSettings("GNU Radio", "app")
@@ -123,6 +127,12 @@ class app(gr.top_block, Qt.QWidget):
         self.threshold = threshold
         Qt.QMetaObject.invokeMethod(self._threshold_line_edit, "setText", Qt.Q_ARG("QString", eng_notation.num_to_str(self.threshold)))
 
+    def get_select_index(self):
+        return self.select_index
+
+    def set_select_index(self, select_index):
+        self.select_index = select_index
+
     def get_gain(self):
         return self.gain
 
@@ -134,14 +144,12 @@ class app(gr.top_block, Qt.QWidget):
 
     def set_fs(self, fs):
         self.fs = fs
-        self.iio_fmcomms2_source_0.set_params(self.fc, self.fs, 20000000, True, True, True, 'manual', 64, 'manual', 64, 'A_BALANCED', '', True)
 
     def get_fc(self):
         return self.fc
 
     def set_fc(self, fc):
         self.fc = fc
-        self.iio_fmcomms2_source_0.set_params(self.fc, self.fs, 20000000, True, True, True, 'manual', 64, 'manual', 64, 'A_BALANCED', '', True)
 
 
 

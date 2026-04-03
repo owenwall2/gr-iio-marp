@@ -15,14 +15,16 @@ from flask_socketio import SocketIO
 from threading import Thread
 import zmq.green as zmq
 import numpy as np
+import base64
+import xmlrpc.client
 from collections import deque
 
 # # GNURadio-IIO and libiio hack
-# import sys
-# if "/usr/lib/python3.8/site-packages" not in sys.path:
-#     sys.path.insert(0, "/usr/lib/python3.8/site-packages")
+import sys
+if "/usr/lib/python3.8/site-packages" not in sys.path:
+    sys.path.insert(0, "/usr/lib/python3.8/site-packages")
 
-# import iio_hw
+import iio_hw
 
 
 try:
@@ -40,6 +42,8 @@ HTTP_ADDRESS = "0.0.0.0"
 HTTP_PORT    = 5000
 ZMQ_ADDRESS  = "127.0.0.1"
 
+gnuradio_control = xmlrpc.client.ServerProxy('http://127.0.0.1:5010')
+
 # One ZMQ port per application (GNU Radio flowgraph ZMQ PUB sinks)
 ZMQ_PORTS = {
     "adsb":  5001,
@@ -56,9 +60,15 @@ state = {
     "zmq_connected": False,    # at least one ZMQ message received recently
     "params": {
         "adsb":  {"center_freq": 1090e6, "gain": 50},
-        "fm":    {"center_freq":  96.7e6, "gain": 40, "volume": 80},
+        "fm":    {"center_freq":  88.1e6, "gain": 40, "volume": 80},
         "radar": {"center_freq":  95.0e6, "gain": 50, "integration_time": 1.0},
     }
+}
+
+mode_to_index = {
+    "adsb": 0,
+    "fm": 1,
+    "radar": 2
 }
 
 # ── Flask / SocketIO ──────────────────────────────────────────
@@ -154,54 +164,66 @@ def make_adsb_zmq_thread():
 
 def make_fm_zmq_thread(port):
     def _thread():
-        import numpy as np
-        import base64
-
         context = zmq.Context()
         socket  = context.socket(zmq.SUB)
+        # OPTIMIZATION 1: Set a small HWM to prevent old audio from "piling up" 
+        # during frequency switches, which causes that "choppy" catch-up sound.
+        socket.setsockopt(zmq.RCVHWM, 10)
         socket.setsockopt(zmq.SUBSCRIBE, b"")
         socket.connect("tcp://{}:{:d}".format(ZMQ_ADDRESS, port))
-        print("ZMQ listener [FM    ] connected to tcp://{}:{}".format(ZMQ_ADDRESS, port))
+        
+        print("ZMQ listener [FM] connected")
 
         spectrum_counter = 0
+        # OPTIMIZATION 2: Pre-allocate window to save CPU cycles inside the loop
+        window = None 
 
         while True:
             try:
-                raw = socket.recv()          # raw float32 bytes from ZMQ PUB Sink
-                state["zmq_connected"] = True
-                socketio.emit("serverStatus", {"zmq_connected": True})
+                # Use NOBLOCK to ensure the thread doesn't hang the event loop
+                try:
+                    raw = socket.recv(zmq.NOBLOCK)
+                except zmq.Again:
+                    time.sleep(0.01)
+                    continue
 
                 if state["mode"] != "fm":
-                    continue                 # still drain the socket, just don't emit
+                    continue # Drains the socket but skips heavy math
 
+                state["zmq_connected"] = True
                 samples = np.frombuffer(raw, dtype=np.float32)
+                
+                if len(samples) == 0:
+                    continue
 
                 # Signal power
                 power_db = float(10 * np.log10(np.mean(samples**2) + 1e-12))
 
-                # Spectrum — only compute every 4th chunk to save CPU
+                # OPTIMIZATION 3: More aggressive Spectrum decimation
+                # We update the UI spectrum much less often than the audio
                 spectrum = None
                 spectrum_counter += 1
-                if spectrum_counter % 4 == 0:
-                    window   = np.hanning(len(samples))
+                if spectrum_counter % 10 == 0:
+                    if window is None or len(window) != len(samples):
+                        window = np.hanning(len(samples))
+                    
                     fft_vals = np.fft.rfft(samples * window)
-                    spectrum = (20 * np.log10(np.abs(fft_vals) / len(samples) + 1e-12)).tolist()
-                    spectrum = spectrum[::4]  # decimate for display
+                    # Decimate the FFT result (take every 8th bin) for lower frontend load
+                    spectrum = (20 * np.log10(np.abs(fft_vals) / len(samples) + 1e-12)).tolist()[::8]
 
-                # Audio — base64 encode raw float32 PCM for Web Audio API
+                # Audio — standard base64 for Web Audio API
                 audio_b64 = base64.b64encode(raw).decode("ascii")
 
                 socketio.emit("updateFM", {
                     "audio":      audio_b64,
                     "signal_db":  power_db,
-                    "spectrum":   spectrum,   # None on skipped frames, frontend handles it
+                    "spectrum":   spectrum,
                     "center_freq": state["params"]["fm"]["center_freq"],
                 })
 
             except Exception as e:
-                print("ZMQ error [FM]: {}".format(e))
-                time.sleep(0.1)   # short sleep — audio is time-sensitive
-
+                print(f"ZMQ error [FM]: {e}")
+                time.sleep(0.1)
     return _thread
 
 def radar_ref_handler(raw):
@@ -226,6 +248,7 @@ def make_radar_thread(port, handler):
                 print(f"ZMQ error [RADAR]: {e}")
                 time.sleep(0.1)
     return _thread
+    
 
 def radar_processing_thread():
     fs = 583e6
@@ -241,11 +264,14 @@ def radar_processing_thread():
 
     while True:
         try:
-            if len(radar_ref_buffer) < (num_blocks * step + N):
-                time.sleep(0.05)
+            if state["mode"] != "radar":
+                radar_ref_buffer.clear()
+                radar_surv_buffer.clear()
+                time.sleep(0.5)
                 continue
 
-            if len(radar_surv_buffer) < (num_blocks * step + N):
+            if len(radar_ref_buffer) < (num_blocks * step + N) or \
+               len(radar_surv_buffer) < (num_blocks * step + N):
                 time.sleep(0.05)
                 continue
 
@@ -289,6 +315,14 @@ def radar_processing_thread():
             print("Radar processing error:", e)
             time.sleep(0.1)
 
+def update_gnuradio_selector(mode):
+    try:
+        idx = mode_to_index.get(mode, 0)
+        gnuradio_control.set_select_index(idx) 
+        print(f"GNU Radio Selector set to index {idx} ({mode})")
+    except Exception as e:
+        print(f"XML-RPC Connection Error: {e}")
+
 # ── REST API ──────────────────────────────────────────────────
 
 @app.route("/api/mode", methods=["GET"])
@@ -306,6 +340,7 @@ def set_mode():
         return jsonify({"error": "Unknown mode. Choose: {}".format(VALID_MODES)}), 400
     state["mode"] = mode
     print("Mode switched to:", mode)
+    update_gnuradio_selector(mode)
     socketio.emit("modeChanged", {"mode": mode})
     return jsonify({"mode": mode, "ok": True})
 
