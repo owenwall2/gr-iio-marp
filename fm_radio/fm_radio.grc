@@ -21,7 +21,7 @@ options:
     run_options: prompt
     sizing_mode: fixed
     thread_safe_setters: ''
-    title: Not titled yet
+    title: FMRadio
     window_size: (1000,1000)
   states:
     bus_sink: false
@@ -135,7 +135,7 @@ blocks:
     rx1_en: 'True'
     rx2_en: 'False'
     samplerate: samp_rate
-    uri: ip:192.168.65.254
+    uri: ip:192.168.178.2
   states:
     bus_sink: false
     bus_source: false

@@ -3,7 +3,7 @@ label: ADS-B Decoder
 category: '[ADS-B]'
 
 templates:
-  imports: import gnuradio.adsb as adsb
+  imports: import adsb
   make: adsb.decoder(${msg_filter}, ${error_corr}, ${print_level})
 
 parameters:

@@ -1,17 +1,17 @@
 # Download and build libiio
-apt update
-apt install -y libxml2 libxml2-dev bison flex cmake git libaio-dev libboost-all-dev swig libavahi-client-dev libavahi-common-dev
+sudo apt update
+sudo apt install -y libxml2 libxml2-dev bison flex cmake git libaio-dev libboost-all-dev swig libavahi-client-dev libavahi-common-dev
 
 # Blank Docker install requirment
-apt install -y python3-pip python3-setuptools
-apt install -y liborc-0.4-0 liborc-0.4-dev
-apt install -y iproute2 inetutils-ping nano
-apt install -y libiio-utils
+sudo apt install -y python3-pip python3-setuptools
+sudo apt install -y liborc-0.4-0 liborc-0.4-dev
+sudo apt install -y iproute2 inetutils-ping nano
+sudo apt install -y libiio-utils
 
-apt install -y git cmake build-essential libxml2-dev libusb-1.0-0-dev python3-dev pkg-config
+sudo apt install -y git cmake build-essential libxml2-dev libusb-1.0-0-dev python3-dev pkg-config
 
-apt install -y swig pkg-config
-apt install -y doxygen
+sudo apt install -y swig pkg-config
+sudo apt install -y doxygen
 
 
 

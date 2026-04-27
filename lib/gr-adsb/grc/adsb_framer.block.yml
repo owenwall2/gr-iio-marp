@@ -3,7 +3,7 @@ label: ADS-B Framer
 category: '[ADS-B]'
 
 templates:
-  imports: import gnuradio.adsb as adsb
+  imports: import adsb
   make: adsb.framer(${fs}, ${threshold})
   callbacks:
   - set_threshold(${threshold})

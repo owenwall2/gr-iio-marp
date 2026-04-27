@@ -83,6 +83,7 @@
     // Notify new module it's gaining focus
     if (app === 'adsb')  ADSB.invalidateSize();   // fix Leaflet tile rendering
     if (app === 'fm')    FM.onActivate();
+    if (app === 'radar') Radar.reset();
 
     // Tell the server — so it gates which ZMQ stream to forward
     fetch('/api/mode', {
@@ -126,29 +127,28 @@
       };
     }
 
-  fetch('/api/params', {
+    fetch('/api/params', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ app: app, params: params })
-  })
-  .then(function (r) { return r.json(); })
-  .then(function (d) {
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
       if (d.ok) {
-          // Green: server accepted + hardware confirmed
-          log('Params sent → ' + app.toUpperCase(), 'ok');
-          if (d.hw_msg) log(d.hw_msg, 'ok');
+        // Green: server accepted + hardware confirmed
+        log('Params sent → ' + app.toUpperCase(), 'ok');
+        if (d.hw_msg) log(d.hw_msg, 'ok');
       } else {
-          // Orange: request reached server but hardware failed
-          log('Params sent → ' + app.toUpperCase(), 'ok');
-          log(d.hw_msg || d.error || 'Hardware update failed', 'err');
+        // Orange: request reached server but hardware failed
+        log('Params sent → ' + app.toUpperCase(), 'ok');
+        log(d.hw_msg || d.error || 'Hardware update failed', 'err');
       }
-  })
-  .catch(function (e) {
+    })
+    .catch(function (e) {
       // Red: never reached the server (network drop, double-press race, etc.)
       log('Param send FAILED: ' + e, 'err');
-  });
-  } 
-  
+    });
+  }
 
   // ── Status helpers ─────────────────────────────────────────
   function _setWsStatus(connected) {

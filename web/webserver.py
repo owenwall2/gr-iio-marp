@@ -19,7 +19,7 @@ import base64
 import xmlrpc.client
 from collections import deque
 
-# # GNURadio-IIO and libiio hack
+# # GNURadio-iio_hw and libiio_hw hack
 import sys
 if "/usr/lib/python3.8/site-packages" not in sys.path:
     sys.path.insert(0, "/usr/lib/python3.8/site-packages")
@@ -34,8 +34,8 @@ except ImportError:
     print("WARNING: pmt not available, ZMQ messages will be raw bytes")
     HAS_PMT = False
 
-ZED_IP = "192.168.65.254"   # ZED board's IP over Ethernet
-_iio_ctx = None
+ZED_IP = "192.168.178.2"   # ZED board's IP over Ethernet
+_iio_hw_ctx = None
 
 # ── Network config ────────────────────────────────────────────
 HTTP_ADDRESS = "0.0.0.0"
@@ -48,8 +48,7 @@ gnuradio_control = xmlrpc.client.ServerProxy('http://127.0.0.1:5010')
 ZMQ_PORTS = {
     "adsb":  5001,
     "fm":    5002,
-    "radar_ref": 5003,
-    "radar_surv": 5004,
+    "radar": 5003,
 }
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -74,33 +73,29 @@ mode_to_index = {
 # ── Flask / SocketIO ──────────────────────────────────────────
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="/static")
 app.config["SECRET_KEY"] = "marp-secret"
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent',
+                    logger=False, engineio_logger=False)
 
 
-# Radar buffers
-radar_ref_buffer  = deque(maxlen=2_000_000)
-radar_surv_buffer = deque(maxlen=2_000_000)
-
-
-def _get_iio_context():
-    """Lazy-connect to the ZED board's IIO daemon."""
-    global _iio_ctx
+def _get_iio_hw_context():
+    """Lazy-connect to the ZED board's iio_hw daemon."""
+    global _iio_hw_ctx
     try:
-        import iio
-        if _iio_ctx is None:
-            _iio_ctx = iio_hw.Context(f"ip:{ZED_IP}")
-            print("IIO connected to ZED board at", ZED_IP)
-        return _iio_ctx
+        import iio_hw
+        if _iio_hw_ctx is None:
+            _iio_hw_ctx = iio_hw.Context(f"ip:{ZED_IP}")
+            print("iio_hw connected to ZED board at", ZED_IP)
+        return _iio_hw_ctx
     except Exception as e:
-        print("IIO connection failed:", e)
-        _iio_ctx = None
+        print("iio_hw connection failed:", e)
+        _iio_hw_ctx = None
         return None
 
 def apply_hardware_params(app_name, params):
-    """Push parameter changes directly to FMCOMMS3 via libiio."""
-    ctx = _get_iio_context()
+    """Push parameter changes directly to FMCOMMS3 via libiio_hw."""
+    ctx = _get_iio_hw_context()
     if ctx is None:
-        return {"ok": False, "msg": "IIO unavailable — board not reachable"}
+        return {"ok": False, "msg": "iio_hw unavailable — board not reachable"}
 
     applied = []
     try:
@@ -110,7 +105,7 @@ def apply_hardware_params(app_name, params):
         if "center_freq" in params:
             freq_hz = int(params["center_freq"])
             phy.find_channel("altvoltage0", True).attrs["frequency"].value = str(freq_hz)
-            print("IIO: center_freq set to {} Hz".format(freq_hz))
+            print("iio_hw: center_freq set to {} Hz".format(freq_hz))
             applied.append("freq {:.3f} MHz".format(freq_hz / 1e6))
 
         if "gain" in params:
@@ -119,21 +114,21 @@ def apply_hardware_params(app_name, params):
             phy.find_channel("voltage1", False).attrs["gain_control_mode"].value = "manual"
             phy.find_channel("voltage0", False).attrs["hardwaregain"].value = gain_db
             phy.find_channel("voltage1", False).attrs["hardwaregain"].value = gain_db
-            print("IIO: gain set to {} dB on both RX1 and RX2".format(gain_db))
+            print("iio_hw: gain set to {} dB on both RX1 and RX2".format(gain_db))
             applied.append("gain {} dB (RX1+RX2)".format(gain_db))
 
         if "bandwidth" in params:
             bw_hz = int(params["bandwidth"])
             phy.find_channel("voltage0", False).attrs["rf_bandwidth"].value = str(bw_hz)
-            print("IIO: bandwidth set to {} Hz".format(bw_hz))
+            print("iio_hw: bandwidth set to {} Hz".format(bw_hz))
             applied.append("bw {:.1f} MHz".format(bw_hz / 1e6))
 
         msg = "HW OK: " + ", ".join(applied) if applied else "HW: nothing to change"
         return {"ok": True, "msg": msg}
 
     except Exception as e:
-        print("IIO param apply error:", e)
-        _iio_ctx = None   # force reconnect next time
+        print("iio_hw param apply error:", e)
+        _iio_hw_ctx = None   # force reconnect next time
         return {"ok": False, "msg": "HW ERR: {}".format(str(e))}
 
 
@@ -175,17 +170,17 @@ def make_fm_zmq_thread(port):
     def _thread():
         context = zmq.Context()
         socket  = context.socket(zmq.SUB)
-        # OPTIMIZATION 1: Set a small HWM to prevent old audio from "piling up" 
+        # OPTIMIZATION 1: Set a small HWM to prevent old audio from "piling up"
         # during frequency switches, which causes that "choppy" catch-up sound.
         socket.setsockopt(zmq.RCVHWM, 10)
         socket.setsockopt(zmq.SUBSCRIBE, b"")
         socket.connect("tcp://{}:{:d}".format(ZMQ_ADDRESS, port))
-        
+
         print("ZMQ listener [FM] connected")
 
         spectrum_counter = 0
         # OPTIMIZATION 2: Pre-allocate window to save CPU cycles inside the loop
-        window = None 
+        window = None
 
         while True:
             try:
@@ -197,11 +192,11 @@ def make_fm_zmq_thread(port):
                     continue
 
                 if state["mode"] != "fm":
-                    continue # Drains the socket but skips heavy math
+                    continue  # Drains the socket but skips heavy math
 
                 state["zmq_connected"] = True
                 samples = np.frombuffer(raw, dtype=np.float32)
-                
+
                 if len(samples) == 0:
                     continue
 
@@ -215,7 +210,7 @@ def make_fm_zmq_thread(port):
                 if spectrum_counter % 10 == 0:
                     if window is None or len(window) != len(samples):
                         window = np.hanning(len(samples))
-                    
+
                     fft_vals = np.fft.rfft(samples * window)
                     # Decimate the FFT result (take every 8th bin) for lower frontend load
                     spectrum = (20 * np.log10(np.abs(fft_vals) / len(samples) + 1e-12)).tolist()[::8]
@@ -235,109 +230,63 @@ def make_fm_zmq_thread(port):
                 time.sleep(0.1)
     return _thread
 
-def radar_ref_handler(raw):
-    radar_ref_buffer.extend(np.frombuffer(raw, dtype=np.complex64))
 
-def radar_surv_handler(raw):
-    radar_surv_buffer.extend(np.frombuffer(raw, dtype=np.complex64))
+# ── Radar config ──────────────────────────────────────────────
+# TEMP: set these to the real shape of one radar frame
+RADAR_ROWS = 64   # change after you print the sender shape
+RADAR_COLS = 128   # change after you print the sender shape
 
-def make_radar_thread(port, handler):
+
+def make_radar_thread(port):
     def _thread():
         context = zmq.Context()
         socket = context.socket(zmq.SUB)
         socket.setsockopt(zmq.SUBSCRIBE, b"")
+        socket.setsockopt(zmq.RCVHWM, 1)
         socket.connect(f"tcp://{ZMQ_ADDRESS}:{port}")
-        print(f"ZMQ listener [RADAR ] connected to tcp://{ZMQ_ADDRESS}:{port}")
+        print(f"ZMQ listener [RADAR] connected to tcp://{ZMQ_ADDRESS}:{port}")
 
         while True:
             try:
                 raw = socket.recv()
-                handler(raw)
+                if not raw:
+                    continue
+
+                state["zmq_connected"] = True
+                socketio.emit("serverStatus", {"zmq_connected": True})
+
+                arr = np.frombuffer(raw, dtype=np.float32)
+                # print("RADAR received elements:", arr.size)
+
+                frame = arr.reshape(RADAR_ROWS, RADAR_COLS)
+
+                if state["mode"] == "radar":
+                    socketio.emit("updateRadar", {
+                        "map": frame.tolist(),
+                        "transpose": True
+                    })
+
             except Exception as e:
                 print(f"ZMQ error [RADAR]: {e}")
                 time.sleep(0.1)
+
     return _thread
-    
 
-def radar_processing_thread():
-    fs = 583e6
-    c  = 299792458.0
-
-    N = 1024
-    step = 1024
-    num_blocks = 64
-    nfft_delay = 2 * N - 1
-
-    lags = np.arange(-(N - 1), N)
-    path_diff_m = c * lags / fs
-
-    while True:
-        try:
-            if state["mode"] != "radar":
-                radar_ref_buffer.clear()
-                radar_surv_buffer.clear()
-                time.sleep(0.5)
-                continue
-
-            if len(radar_ref_buffer) < (num_blocks * step + N) or \
-               len(radar_surv_buffer) < (num_blocks * step + N):
-                time.sleep(0.05)
-                continue
-
-            # Pull synchronized chunks
-            ref  = np.array([radar_ref_buffer.popleft()  for _ in range(num_blocks * step + N)])
-            surv = np.array([radar_surv_buffer.popleft() for _ in range(num_blocks * step + N)])
-
-            corr_matrix = np.zeros((num_blocks, nfft_delay), dtype=np.complex64)
-
-            for i in range(num_blocks):
-                start = i * step
-                stop  = start + N
-
-                block_ref  = ref[start:stop]
-                block_surv = surv[start:stop]
-
-                X = np.fft.fft(block_ref, nfft_delay)
-                Y = np.fft.fft(block_surv, nfft_delay)
-
-                corr = np.fft.ifft(Y * np.conj(X))
-                corr_matrix[i, :] = corr
-
-            doppler_map = np.fft.fftshift(
-                np.fft.fft(corr_matrix, axis=0),
-                axes=0
-            )
-
-            rd_map = 20 * np.log10(np.abs(doppler_map) + 1e-12)
-
-            # Downsample for web (VERY IMPORTANT)
-            rd_small = rd_map[::2, ::4].tolist()
-            # mid = N - 1  # only plotting from lag=0 onwards
-            if state["mode"] == "radar":
-                socketio.emit("updateRadar", {
-                    "map": rd_small,
-                    "range_axis": path_diff_m[::4].tolist(), # [mid::4]
-                    "doppler_bins": list(range(-num_blocks//2, num_blocks//2, 2))
-                })
-
-        except Exception as e:
-            print("Radar processing error:", e)
-            time.sleep(0.1)
 
 def update_gnuradio_selector(mode):
     try:
         idx = mode_to_index.get(mode, 0)
-        gnuradio_control.set_select_index(idx) 
+        gnuradio_control.set_select_index(idx)
         print(f"GNU Radio Selector set to index {idx} ({mode})")
     except Exception as e:
         print(f"XML-RPC Connection Error: {e}")
+
 
 # ── REST API ──────────────────────────────────────────────────
 
 @app.route("/api/mode", methods=["GET"])
 def get_mode():
     return jsonify({"mode": state["mode"]})
-
 
 
 VALID_MODES = ["adsb", "fm", "radar"]
@@ -387,7 +336,7 @@ def get_status():
         "mode":          state["mode"],
         "zmq_connected": state["zmq_connected"],
         "zmq_ports":     ZMQ_PORTS,
-        "control_port":  ZMQ_CONTROL_PORT,
+        "control_port":  5010,
     })
 
 
@@ -409,8 +358,8 @@ def static_fallback(filename):
 def on_connect():
     print("Client connected:", request.sid)
     # Send current state to newly connected client
-    socketio.emit("serverStatus", {"zmq_connected": state["zmq_connected"]}, room=request.sid)
-    socketio.emit("modeChanged",  {"mode": state["mode"]},                   room=request.sid)
+    socketio.emit("serverStatus", {"zmq_connected": state["zmq_connected"]}, to=request.sid)
+    socketio.emit("modeChanged",  {"mode": state["mode"]},                   to=request.sid)
 
 
 @socketio.on("disconnect")
@@ -423,9 +372,9 @@ if __name__ == "__main__":
     print("Static dir:", STATIC_DIR)
     print("Starting MARP server on {}:{}".format(HTTP_ADDRESS, HTTP_PORT))
 
-# ── ADS-B (PMT messages) ───────────────────────────────
+    # ── ADS-B (PMT messages) ───────────────────────────────
     Thread(
-        target=make_adsb_zmq_thread(), 
+        target=make_adsb_zmq_thread(),
         daemon=True
     ).start()
 
@@ -435,20 +384,9 @@ if __name__ == "__main__":
         daemon=True
     ).start()
 
-    # ── Radar streams (complex64) ──────────────────────────
+    # ── Radar (finished float32 heatmap frames) ────────────
     Thread(
-        target=make_radar_thread(ZMQ_PORTS["radar_ref"], radar_ref_handler),
-        daemon=True
-    ).start()
-
-    Thread(
-        target=make_radar_thread(ZMQ_PORTS["radar_surv"], radar_surv_handler),
-        daemon=True
-    ).start()
-
-    # ── Radar processing ───────────────────────────────────
-    Thread(
-        target=radar_processing_thread,
+        target=make_radar_thread(ZMQ_PORTS["radar"]),
         daemon=True
     ).start()
 

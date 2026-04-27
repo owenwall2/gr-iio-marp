@@ -3,12 +3,18 @@
 
 A GNU Radio out-of-tree (OOT) module to demodulate and decode Automatic Dependent Surveillance Broadcast (ADS-B) messages.
 
-### Clone for specific GNU Radio version
+Note, the `master` branch of this repository is currently maintained for GNU Radio 3.8. The GNU Radio 3.7 support is on the `maint-3.7` branch.
 
-To clone the version of `gr-adsb` that is compatible with GNU Radio 3.10 (for example), run this command.
+### Clone for GNU Radio 3.8
 
 ```bash
-$ git clone -b maint-3.10 https://github.com/mhostetter/gr-adsb
+$ git clone https://github.com/mhostetter/gr-adsb
+```
+
+### Clone for GNU Radio 3.7
+
+```bash
+$ git clone -b maint-3.7 https://github.com/mhostetter/gr-adsb
 ```
 
 ## Features

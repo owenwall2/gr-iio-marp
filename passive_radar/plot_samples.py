@@ -4,11 +4,11 @@ import matplotlib.pyplot as plt
 ref = np.fromfile("data/ref", dtype=np.complex64)
 surv = np.fromfile("data/surv", dtype=np.complex64)
 
-fs = 8e6
+fs = 12e6
 c = 299792458.0
 
-N = 1024
-step = 1024
+N = 128
+step = 128
 num_blocks = 64
 
 lags = np.arange(-(N - 1), N)
@@ -48,24 +48,29 @@ for j in range(num_maps):
 # only positive range values
 maps_pos = maps[:, :, pos]
 
-color_min = np.min(maps_pos)
-color_max = np.max(maps_pos)
+np.savez(
+    "passive_radar_maps.npz",
+    maps_pos=maps_pos,
+    path_diff_m_pos=path_diff_m_pos,
+    num_blocks=num_blocks
+)
+print("Saved passive_radar_maps.npz")
 
-for k in range(num_maps):
-    plt.clf()
-    plt.imshow(
-        maps_pos[k].T,
-        aspect='auto',
-        origin='lower',
-        interpolation='nearest',
-        extent=[-num_blocks // 2, num_blocks // 2 - 1, path_diff_m_pos[0], path_diff_m_pos[-1]],
-        vmin=color_min,
-        vmax=color_max,
-    )
-    plt.colorbar(label='Magnitude (dB)')
-    plt.xlabel('Doppler bin')
-    plt.ylabel('Bistatic Path Difference (m)')
-    plt.title('Delay-Doppler Heat Map')
-    plt.pause(0.5)
 
-plt.show()
+# for k in range(int(num_maps * 0.7), num_maps):
+#     plt.clf()
+#     plt.imshow(
+#         maps_pos[k].T,
+#         aspect='auto',
+#         origin='lower',
+#         interpolation='nearest',
+#         extent=[-num_blocks // 2, num_blocks // 2 - 1, path_diff_m_pos[0], path_diff_m_pos[-1]]
+#     )
+#     plt.colorbar(label='Magnitude (dB)')
+#     plt.xlabel('Doppler bin')
+#     plt.ylabel('Bistatic Path Difference (m)')
+#     plt.title('Delay-Doppler Heat Map')
+#     plt.pause(0.1)
+#     print("Map:", k, "/", num_maps)
+
+# plt.show()
