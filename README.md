@@ -1,9 +1,11 @@
 # marp
+Multiple Application Radio Platform (MARP)
+
 Unified applications to run on a SDR
 
-Credit:
-Owen Wall
-Mason Vari
+Credits:
+Owen Wall,
+Mason Vari,
 Andrew Ledbetter
 
 Clemson Department of Electrical and Computer Engineering
